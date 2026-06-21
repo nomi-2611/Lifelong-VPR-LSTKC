@@ -4,6 +4,10 @@ A PyTorch implementation for lifelong visual place recognition (VPR) under multi
 
 The pipeline includes SNN-based visual feature extraction, descriptor projection, relation-based knowledge consolidation, stage expert memory, sequence-consistency reranking, and standard VPR evaluation with mAP and Recall@K.
 
+<p align="center">
+  <img src="assets/method_pipeline.png" alt="Method pipeline" width="900">
+</p>
+
 ## Highlights
 
 - **Multi-environment VPR learning** on Oxford RobotCar, Nordland, and Pittsburgh30k style query/gallery protocols.
@@ -54,6 +58,10 @@ The experiments use:
 - Oxford RobotCar
 - Nordland
 - Pittsburgh30k
+
+<p align="center">
+  <img src="assets/datasets_overview.png" alt="Dataset overview" width="760">
+</p>
 
 Example layout:
 
@@ -119,6 +127,18 @@ Common evaluation components include:
 - stage expert pool evaluation
 - sequence-consistency reranking
 - mAP and Recall@K reporting
+
+## Example Results
+
+The following figures show representative retrieval performance from the thesis experiments.
+
+<p align="center">
+  <img src="assets/final_performance.png" alt="Final performance comparison" width="720">
+</p>
+
+<p align="center">
+  <img src="assets/roc_curve.png" alt="ROC curves" width="560">
+</p>
 
 ## Notes
 
