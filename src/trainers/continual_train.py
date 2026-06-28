@@ -33,18 +33,17 @@ from src.datasets.lreid_dataset.datasets.get_data_loaders import _dataloader_kwa
 from src.utils.reid_utils.data import IterLoader
 from src.retrieval.tools.Logger_results import Logger_res
 def main():
-    args = parser.parse_args()  # 1.瑙ｆ瀽鍛戒护琛屽弬鏁?
+    args = parser.parse_args()
     if args.vprtempo_preprocess_cache and not args.vprtempo_preprocess_cache_dir:
         args.vprtempo_preprocess_cache_dir = osp.join(args.logs_dir, 'vprtempo_preprocess_cache')
 
-    if args.seed is not None:  # 2.濡傛灉璁剧疆浜嗛殢鏈虹瀛愶紝鍒欏浐瀹氭墍鏈夐殢鏈烘簮锛屼繚璇佸疄楠屽彲澶嶇幇
+    if args.seed is not None:
         print("setting the seed to",args.seed)
-        random.seed(args.seed)  # Python 鑷甫闅忔満鏁?
-        np.random.seed(args.seed)  # NumPy 闅忔満鏁?
-        torch.manual_seed(args.seed)  # PyTorch CPU 闅忔満鏁?
-        torch.cuda.manual_seed(args.seed)  # PyTorch GPU 闅忔満鏁帮紙鍗曞崱鍜屽鍗★級
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.cuda.manual_seed(args.seed)
         torch.cuda.manual_seed_all(args.seed)
-        # 绂佺敤 cuDNN 鐨勮嚜鍔ㄤ紭鍖栵紝淇濊瘉缁撴灉纭畾鎬?
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
     if args.cudnn_benchmark:
@@ -62,27 +61,22 @@ def main():
             print("tf32 enabled for CUDA matmul/cudnn")
         else:
             print("tf32 requested but CUDA is unavailable; skipping")
-    cfg.merge_from_file(args.config_file)  # 3.浠庨厤缃枃浠讹紙YAML锛変腑璇诲彇骞跺悎骞惰缁冮厤缃?
-    main_worker(args, cfg)  # 4.杩涘叆涓昏缁冩祦绋嬶紙鏁版嵁鍔犺浇銆佹ā鍨嬭缁冦€佹祴璇曠瓑锛?
+    cfg.merge_from_file(args.config_file)
+    main_worker(args, cfg)
 
 
 def main_worker(args, cfg):
     os.makedirs(args.logs_dir, exist_ok=True)
-    log_name = 'log.txt'  # 1.璁剧疆鏃ュ織杈撳嚭
-    if not args.evaluate:  # 濡傛灉涓嶆槸绾瘎浼版ā寮忥紝灏辨妸鎵€鏈?print 鍐欏埌 logs_dir/log.txt
+    log_name = 'log.txt'
+    if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, log_name))
-    else:  # 璇勪及妯″紡锛氭妸鏃ュ織鍐欏埌 test_folder 鐨勭埗鐩綍閲?
+    else:
         log_dir = osp.dirname(args.test_folder) if args.test_folder else args.logs_dir
         sys.stdout = Logger(osp.join(log_dir, log_name))
     print("==========\nArgs:{}\n==========".format(args))
-    log_res_name='log_res.txt'  # 棰濆寮€涓€涓枃浠惰褰曟祴璇曠粨鏋?
+    log_res_name='log_res.txt'
     logger_res=Logger_res(osp.join(args.logs_dir, log_res_name))    # record the test results
 
-    # 2.鍐冲畾鈥滅粓韬涔犵殑璁粌椤哄簭鈥?
-    """
-    loading the datasets:
-    setting锛?1 or 2  # setting=1/2 瀵瑰簲涓嶅悓鏁版嵁闆嗛『搴忥紙椤哄簭浼氬奖鍝嶉仐蹇樼▼搴︼級
-    """
     if args.task_type == 'place':
         if args.place_train_seq:
             training_set = [item.strip() for item in args.place_train_seq.split(',') if item.strip()]
@@ -96,60 +90,51 @@ def main_worker(args, cfg):
         training_set = ['dukemtmc', 'msmt17', 'market1501', 'cuhk_sysu', 'cuhk03']
     if args.max_stages is not None:
         training_set = training_set[:args.max_stages]
-    # all the relevant datasets鎵€鏈夊彲鑳界浉鍏崇殑鏁版嵁闆?
     all_set = ['market1501', 'dukemtmc', 'msmt17', 'cuhk_sysu', 'cuhk03',
                'cuhk01', 'cuhk02', 'grid', 'sense', 'viper', 'ilids', 'prid']  # 'sense','prid'
-    # the datasets only used for testing鍙敤浜庢祴璇曠殑鏁版嵁闆?
     # testing_only_set = [x for x in all_set if x not in training_set]
     testing_only_set = [] if args.task_type == 'place' else ['market1501']
     # print("DEBUG training_set =", training_set)
     # print("DEBUG testing_only_set =", testing_only_set)
 
-    # get the loaders of different datasets # 3.鏋勫缓 DataLoader  # 杩斿洖锛氭瘡涓缁冮樁娈电殑鏁版嵁闆嗕俊鎭?鍙祴璇曠敤鐨勬暟鎹泦淇℃伅
     all_train_sets, all_test_only_sets = build_data_loaders(args, training_set, testing_only_set)
-    # 4.鍒濆鍖栨ā鍨?
-    # all_train_sets[0] 閲屽寘鍚涓€涓缁冩暟鎹泦鐨勪俊鎭?
     first_train_set = all_train_sets[0]
     model = make_model(args, num_class=first_train_set[1], camera_num=0, view_num=0)
-    # 鐢ㄧ涓€涓暟鎹泦鐨勭被鍒暟(num_classes)鍒濆鍖栧垎绫诲ご
-    model.cuda()  # 鏀惧埌GPU+澶氬崱灏佽
+    model.cuda()
     model = DataParallel(model)
     pending_evaluate = args.evaluate and not args.test_folder
     if pending_evaluate:
         args.evaluate = False
-    writer = SummaryWriter(log_dir=args.logs_dir)  # TensorBoard璁板綍鍣?
+    writer = SummaryWriter(log_dir=args.logs_dir)
     if args.evaluate and not args.test_folder:
         test_model(model, all_train_sets, all_test_only_sets, len(all_train_sets) - 1, logger_res=logger_res, args=args)
         return
     # Load from checkpoint
-    '''test the models under a folder'''  # 5.test_folder锛氬彧鍔犺浇澶氫釜 checkpoint 鍋氳瀺鍚堝苟娴嬭瘯
+    '''test the models under a folder'''
     if args.test_folder:
-        ckpt_name = [x + '_checkpoint.pth.tar' for x in training_set]   # obtain pretrained model name  # 姣忎釜璁粌鏁版嵁闆嗗搴斾竴涓枃浠跺悕
+        ckpt_name = [x + '_checkpoint.pth.tar' for x in training_set]
         checkpoint = load_checkpoint(osp.join(args.test_folder, ckpt_name[0]))  # load the first model
         copy_state_dict(checkpoint['state_dict'], model)
-        for step in range(len(ckpt_name) - 1):  # 渚濇鍔犺浇鍚庣画妯″瀷锛屽苟涓庝笂涓€闃舵妯″瀷鍋氳嚜閫傚簲铻嶅悎
-            model_old = copy.deepcopy(model)    # backup the old model 澶囦唤鏃фā鍨嬶紙闀挎湡璁板繂锛?
-            checkpoint = load_checkpoint(osp.join(args.test_folder, ckpt_name[step + 1]))  # 鍔犺浇褰撳墠闃舵妯″瀷锛堢煭鏈熸柊鐭ヨ瘑锛?
+        for step in range(len(ckpt_name) - 1):
+            model_old = copy.deepcopy(model)
+            checkpoint = load_checkpoint(osp.join(args.test_folder, ckpt_name[step + 1]))
             copy_state_dict(checkpoint['state_dict'], model)
 
                          
-            best_alpha = get_adaptive_alpha(args, model, model_old, all_train_sets, step + 1) # 鏍规嵁浜插拰鐭╅樀鍙樺寲绠梐lpha锛堝樊寮傝秺澶э紝瓒婁繚鐣欐棫妯″瀷锛?
-            model = linear_combination(args, model, model_old, best_alpha)  # 鍙傛暟铻嶅悎锛歯ew=alpha*褰撳墠妯″瀷+(1-alpha)*鏃фā鍨?
-            # 淇濆瓨铻嶅悎鍚庣殑妯″瀷
+            best_alpha = get_adaptive_alpha(args, model, model_old, all_train_sets, step + 1)
+            model = linear_combination(args, model, model_old, best_alpha)
             save_name = '{}_checkpoint_adaptive_ema_{:.4f}.pth.tar'.format(training_set[step+1], best_alpha)
             save_checkpoint({
                 'state_dict': model.state_dict(),
                 'epoch': 0,
                 'mAP': 0,
             }, True, fpath=osp.join(args.logs_dir, save_name))
-        # extract_test_features(model, all_train_sets, all_test_only_sets, args.test_folder)铻嶅悎瀹屾垚鍚庡仛娴嬭瘯
         test_model(model, all_train_sets, all_test_only_sets, len(all_train_sets)-1, logger_res=logger_res, args=args)
 
-        exit(0)  # 鐩存帴缁撴潫绋嬪簭锛屼笉杩涘叆璁粌鍒嗘敮
+        exit(0)
 
 
     # resume from a model
-    # 6.resume 妯″紡锛氫粠鏌愪釜checkpoint缁х画璁粌
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
         copy_state_dict(checkpoint['state_dict'], model)
@@ -161,8 +146,7 @@ def main_worker(args, cfg):
         test_model(model, all_train_sets, all_test_only_sets, len(all_train_sets) - 1, logger_res=logger_res, args=args)
         return
    
-    # Evaluator 7. 璁剧疆 backbone 杈撳嚭缁村害
-    if args.MODEL in ['50x']:  # ResNet-50 鐨勮緭鍑虹壒寰佷竴鑸槸 2048 缁?
+    if args.MODEL in ['50x']:
         out_channel = 2048
     elif args.MODEL == 'snn_tiny':
         out_channel = args.snn_embed_dim
@@ -172,9 +156,8 @@ def main_worker(args, cfg):
         raise AssertionError(f"the model {args.MODEL} is not supported!")
 
 
-    # train on the datasets squentially 8.鎸夋暟鎹泦椤哄簭涓€涓釜璁粌
     for set_index in range(0, len(training_set)):       
-        model_old = copy.deepcopy(model)  # 澶囦唤鏃фā鍨嬶紝鐢ㄤ簬鍚庨潰铻嶅悎锛堥暱鏈熻蹇嗭級
+        model_old = copy.deepcopy(model)
         if args.MODEL == 'vprtempo_snn' and args.vprtempo_stage_adapt:
             dataset_stage = all_train_sets[set_index][0]
             stage_name = all_train_sets[set_index][-1]
@@ -186,10 +169,9 @@ def main_worker(args, cfg):
                 current_model_path=getattr(model.module, 'model_path', args.vprtempo_model_path),
             )
             model.module.reload_base_from_model_path(adapted_path, freeze_mode=args.vprtempo_freeze_mode)
-        # 鍦ㄥ綋鍓嶆暟鎹泦涓婅缁冧竴涓樁娈碉紙浼氬湪閲岄潰鎵╁睍鍒嗙被鍣ㄧ瓑锛?
         model = train_dataset(cfg, args, all_train_sets, all_test_only_sets, set_index, model, out_channel,
                                             writer,logger_res=logger_res, stage_reference_model=model_old)
-        if set_index>0:  # 浠庣浜岄樁娈靛紑濮嬶細璁粌瀹屽仛 alpha 铻嶅悎 + 娴嬭瘯
+        if set_index>0:
             best_alpha = get_adaptive_alpha(args, model, model_old, all_train_sets, set_index)
             if not bool(getattr(args, 'disable_stage_model_fusion', False)):
                 model = linear_combination(args, model, model_old, best_alpha)
@@ -199,25 +181,9 @@ def main_worker(args, cfg):
             test_model(model, all_train_sets, all_test_only_sets, set_index, logger_res=logger_res, args=args)
     print('finished')
 def get_normal_affinity(x,Norm=100):
-    # 鎶婄壒寰佷箣闂寸殑鐩镐技搴︼紝鍙樻垚涓€涓翰鍜岀煩闃碉紝鐢ㄥ湪鍚庨潰 姣旇緝鈥滄柊妯″瀷鈥濆拰鈥滄棫妯″瀷鈥濆鍒扮殑鐗瑰緛缁撴瀯宸紓锛屼粠鑰屽喅瀹氳瀺鍚堟潈閲?alpha
-    """
-       鏍规嵁杈撳叆鐗瑰緛璁＄畻浜插拰鐭╅樀锛坅ffinity matrix锛?
 
-       鍙傛暟璇存槑锛?
-       x    : Tensor锛屽舰鐘朵负 [N, D]锛岃〃绀?N 涓牱鏈殑鐗瑰緛鍚戦噺
-       Norm : 鏀惧ぇ绯绘暟锛岀敤浜庡寮虹浉浼煎害涔嬮棿鐨勫樊寮傦紙榛樿 100锛?
-
-       杩斿洖锛?
-       pre_affinity_matrix : [N, N] 鐨勪翰鍜岀煩闃碉紝
-                             姣忎竴琛岃〃绀衡€滆鏍锋湰涓庡叾浠栨牱鏈殑鐩镐技搴﹀垎甯冣€?
-       """
-
-    # 浣跨敤浣欏鸡鐩镐技搴﹁绠楁牱鏈袱涓や箣闂寸殑鐩镐技搴?
-    # 杈撳嚭涓?[N, N] 鐨勭浉浼煎害鐭╅樀
     from src.knowledge.metric_learning.distance import cosine_similarity
     pre_matrix_origin=cosine_similarity(x,x)
-    # 瀵圭浉浼煎害杩涜鏀惧ぇ鍚庯紝鍐嶆寜琛屽仛 softmax 褰掍竴鍖?
-    # 寰楀埌浜插拰鐭╅樀锛屾瘡涓€琛屽拰涓?1
     pre_affinity_matrix=F.softmax(pre_matrix_origin*Norm, dim=1)
     return pre_affinity_matrix
 
@@ -674,39 +640,28 @@ def build_self_teacher_feature_bank(model, data_loader, limit=None):
         model.train()
     return teacher_bank
 def get_adaptive_alpha(args, model, model_old, all_train_sets, set_index):
-    """
-    鏍规嵁鏂版棫妯″瀷鍦ㄥ綋鍓嶆暟鎹泦涓婄殑鐗瑰緛缁撴瀯宸紓锛岃嚜閫傚簲璁＄畻铻嶅悎鏉冮噸 alpha
-    """
-    # 1.鍙栧嚭褰撳墠闃舵鐨勬暟鎹泦鍙婂叾鍒濆鍖?loader
     dataset_new, num_classes_new, train_loader_new, _, init_loader_new, name_new = \
         all_train_sets[set_index]
 
-    # 2.鐢ㄥ綋鍓嶆ā鍨嬶紙鏂版ā鍨嬶級鍦ㄥ悓涓€鎵规暟鎹笂鎻愬彇鐗瑰緛
     features_all_new, labels_all, fnames_all, camids_all, \
     features_mean_new, labels_named = extract_features_voro(
         model, init_loader_new, get_mean_feature=True
     )
 
-    # 3.鐢ㄦ棫妯″瀷鍦ㄥ悓涓€鎵规暟鎹笂鎻愬彇鐗瑰緛
     features_all_old, _, _, _, features_mean_old, _ = extract_features_voro(
         model_old, init_loader_new, get_mean_feature=True
     )
 
-    # 4.灏嗙壒寰佸垪琛ㄨ浆鎹负 tensor锛屽舰鐘朵负 [N, D]
     features_all_new = _subsample_feature_list(features_all_new, args.alpha_sample_limit)
     features_all_old = _subsample_feature_list(features_all_old, args.alpha_sample_limit)
     features_all_new = torch.stack(features_all_new, dim=0).cpu()
     features_all_old = torch.stack(features_all_old, dim=0).cpu()
 
-    # 5.鍒嗗埆璁＄畻鏂版ā鍨嬪拰鏃фā鍨嬬殑浜插拰鐭╅樀
     Affin_new = get_normal_affinity(features_all_new)
     Affin_old = get_normal_affinity(features_all_old)
 
-    # 6.璁＄畻浜插拰鐭╅樀鐨勬暣浣撳樊寮傦紝琛￠噺鏂版棫妯″瀷鐨勭壒寰佺粨鏋勫彉鍖栫▼搴?
     Difference = torch.abs(Affin_new - Affin_old).sum(-1).mean()
 
-    # 7.鏍规嵁宸紓澶у皬璁＄畻鑷€傚簲铻嶅悎绯绘暟
-    # 宸紓瓒婂皬锛宎lpha 瓒婃帴杩?1锛岃秺淇′换鏂版ā鍨?
     alpha = float(torch.clamp(1 - Difference, min=0.0, max=1.0))
 
     return alpha
@@ -715,46 +670,32 @@ def get_adaptive_alpha(args, model, model_old, all_train_sets, set_index):
 def train_dataset(cfg, args, all_train_sets, all_test_only_sets, set_index, model, out_channel, writer,logger_res=None,
                   stage_reference_model=None):
     dataset, num_classes, train_loader, test_loader, init_loader, name = all_train_sets[
-        set_index]  # status of current dataset 鍙栧嚭褰撳墠闃舵鐨勬暟鎹泦淇℃伅锛堢 set_index 涓换鍔?鏁版嵁闆嗭級
+        set_index]
 
-    Epochs= args.epochs0 if 0==set_index else args.epochs  # 绗竴涓樁娈佃缁冨緱鏇翠箙锛坋pochs0锛夛紝鍚庣画闃舵鐢╡pochs
-    # add_num锛氬巻鍙插凡瑙佽繃鐨処D鏁伴噺锛堟棫绫诲埆鏁帮級
-    # set_index<=1 鏃剁洿鎺ョ疆 0
+    Epochs= args.epochs0 if 0==set_index else args.epochs
     if set_index<=1:
         add_num = 0
         old_model=None
-    else:  # 缁熻涔嬪墠闃舵锛堝埌 set_index-2锛夌殑绫诲埆鎬绘暟
+    else:
         add_num = sum(
             [all_train_sets[i][1] for i in range(set_index - 1)])  # get person number in existing domains
 
     # =========================================================
-    # 濡傛灉涓嶆槸绗竴涓樁娈碉紙set_index>0锛夛紝灏辫繘鍏?continual 鐨勫叧閿楠わ細
-    # 1) 澶囦唤鏃фā鍨?old_model锛堢敤浜庡弽閬楀繕锛氳捀棣?姝ｅ垯/瀵归綈绛夛級
-    # 2) 鎵╁睍鍒嗙被鍣?classifier 鐨勮緭鍑虹淮搴︼紙鏃D + 鏂癐D锛?
-    # 3) 鐢ㄧ被涓績鍒濆鍖栨柊绫诲埆鐨勫垎绫诲櫒鏉冮噸
     # =========================================================
     if set_index>0:
         '''store the old model'''
-        # 1) 淇濆瓨鏃фā鍨嬶紙鐩稿綋浜庨暱鏈熻蹇嗭紝鐢ㄦ潵绾︽潫鏂版ā鍨嬩笉瑕佸繕锛?
         old_model = copy.deepcopy(stage_reference_model) if stage_reference_model is not None else copy.deepcopy(model)
         old_model = old_model.cuda()
-        old_model.eval()  # 鎺ㄧ悊妯″紡锛屼笉鏇存柊BN绛?
+        old_model.eval()
 
         # after sampling rehearsal, recalculate the addnum(historical ID number)
-        # 2) 閲嶆柊璁＄畻 add_num锛氳繖閲岃〃绀衡€滃綋鍓嶉樁娈典箣鍓嶆墍鏈変换鍔＄殑鎬籌D鏁扳€?
         add_num = sum([all_train_sets[i][1] for i in range(set_index)])  # get model out_dim
         # Expand the dimension of classifier
-        # 3) 鎵╁睍鍒嗙被鍣ㄧ淮搴︼細浠?oldC -> oldC + newC
-        # 鍏堟妸鏃у垎绫诲櫒鍙傛暟淇濆瓨涓嬫潵
         org_classifier_params = model.module.classifier.weight.data
-        # 鏂板缓涓€涓洿澶ц緭鍑虹淮搴︾殑 Linear 鍒嗙被鍣?
         model.module.classifier = nn.Linear(out_channel, add_num + num_classes, bias=False)
-        # 鎶婃棫绫诲埆鏉冮噸鎷疯礉鍒版柊鍒嗙被鍣ㄧ殑鍓?add_num 琛?
         model.module.classifier.weight.data[:add_num].copy_(org_classifier_params)
         model.cuda()    
         # Initialize classifer with class centers
-        # 4) 鍒濆鍖栨柊绫诲埆鐨勫垎绫诲櫒鏉冮噸锛堢敤鈥滅被涓績鈥濇潵鍒濆鍖栵紝鏀舵暃鏇村揩鏇寸ǔ锛?
-        # init_loader 鐢ㄦ潵鎻愬彇鐗瑰緛骞剁畻涓績鐨勶紝涓嶆槸璁粌鐢ㄧ殑 loader
         class_centers = initial_classifier(model, init_loader)
         model.module.classifier.weight.data[add_num:].copy_(class_centers)
         model.cuda()
@@ -786,17 +727,14 @@ def train_dataset(cfg, args, all_train_sets, all_test_only_sets, set_index, mode
 
     # Re-initialize optimizer
     # =========================================================
-    # 閲嶆柊鍒濆鍖栦紭鍖栧櫒锛堟瘡涓樁娈甸兘閲嶆柊寤轰竴娆★級
     # =========================================================
     trainable_params = []
     for key, value in model.named_params(model):
-        # 璺宠繃涓嶉渶瑕佹洿鏂扮殑鍙傛暟锛堟瘮濡傚喕缁撶殑灞傦級
         if not value.requires_grad:
             print('not requires_grad:', key)
             continue
         trainable_params.append(value)
     params = [{"params": trainable_params, "lr": args.lr, "weight_decay": args.weight_decay}]
-    # 閫夋嫨浼樺寲鍣?
     if args.optimizer == 'Adam':
         try:
             optimizer = torch.optim.Adam(params, foreach=True)
@@ -807,12 +745,9 @@ def train_dataset(cfg, args, all_train_sets, all_test_only_sets, set_index, mode
             optimizer = torch.optim.SGD(params, momentum=args.momentum, foreach=True)
         except TypeError:
             optimizer = torch.optim.SGD(params, momentum=args.momentum)
-    # 瀛︿範鐜囪皟搴︼細warmup + milestones琛板噺
     Stones=args.milestones
     lr_scheduler = WarmupMultiStepLR(optimizer, Stones, gamma=0.1, warmup_factor=0.01, warmup_iters=args.warmup_step)
     # =========================================================
-    # Trainer 閲屼竴鑸寘鍚細鍓嶅悜銆乴oss璁＄畻锛圕E+Triplet绛夛級銆佸弽閬楀繕椤广€佸弽鍚戞洿鏂?
-    # add_num + num_classes 琛ㄧず褰撳墠鍒嗙被鍣ㄨ緭鍑烘€荤被鍒暟
     # =========================================================
   
     trainer = Trainer(cfg, args, model, add_num + num_classes,  writer=writer)
@@ -835,37 +770,27 @@ def train_dataset(cfg, args, all_train_sets, all_test_only_sets, set_index, mode
 
     print('####### starting training on {} #######'.format(name))
     # =========================================================
-    # 杩涘叆璁粌寰幆
     # =========================================================
     for epoch in range(0, Epochs):
-        # ReID 鐨?dataloader 寰堝浼氭瘡涓?epoch 閲嶆柊閲囨牱
         train_loader.new_epoch()
-        # 璁粌涓€涓?epoch
-        # training_phase=set_index+1 琛ㄧず绗嚑涓樁娈碉紙鐢ㄤ簬continual/鍙嶉仐蹇樼瓥鐣ワ級
-        # add_num 琛ㄧず鏃х被鏁伴噺
-        # old_model 鏄棫妯″瀷锛堢敤浜庤捀棣忔垨绾︽潫鏂版ā鍨嬩笉瑕佸繕锛?
         trainer.train(epoch, train_loader,  optimizer, training_phase=set_index + 1,
                       train_iters=len(train_loader), add_num=add_num, old_model=old_model,
                       raw_memory_loader=raw_memory_loader,
                       )
-        lr_scheduler.step()   # 鏇存柊瀛︿範鐜?
+        lr_scheduler.step()
 
         # =========================================================
-        # 淇濆瓨 checkpoint锛堥€氬父 eval_epoch=100 寰堝ぇ锛屾墍浠ヤ竴鑸彧鍦ㄦ渶鍚庝竴杞繚瀛橈級
         # =========================================================
         if ((epoch + 1) % args.eval_epoch == 0 or epoch+1==Epochs):
             save_checkpoint({
                 'state_dict': model.state_dict(),
                 'epoch': epoch + 1,
-                'mAP': 0.,  # 鍏堜繚瀛樹竴娆★紙mAP鍏堝啓0锛?
+                'mAP': 0.,
             }, True, fpath=osp.join(args.logs_dir, '{}_checkpoint.pth.tar'.format(name)))
-            # 鍐欏叆鏃ュ織锛氬綋鍓?epoch
             logger_res.append('epoch: {}'.format(epoch + 1))
-            # 鏄惁涓€旀祴璇曪紙榛樿涓嶅紑锛?
             mAP=0.
             if args.middle_test:
                 mAP = test_model(model, all_train_sets, all_test_only_sets, set_index, logger_res=logger_res, args=args)
-            # 鍐嶄繚瀛樹竴娆★紙鎶婄湡瀹瀖AP鍐欒繘鍘伙級
             save_checkpoint({
                 'state_dict': model.state_dict(),
                 'epoch': epoch + 1,
@@ -880,16 +805,13 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
     begin = 0
     evaluator = Evaluator(model)
     # =========================
-    # Part 1锛氬湪 Seen锛堣缁冭繃鐨勬暟鎹泦锛変笂娴嬭瘯
-    # Seen 鐨勮寖鍥存槸锛歛ll_train_sets[0] ~ all_train_sets[set_index]
     # =========================
     R1_all = []
     mAP_all = []
     names=''
     Results=''
-    train_mAP=0  # 鐢ㄦ潵杩斿洖鏈€鍚庝竴娆?seen 娴嬭瘯鐨?mAP锛堜笉鏄钩鍧噈AP锛?
+    train_mAP=0
     for i in range(begin, set_index + 1):
-        # 鍙栧嚭绗?i 涓缁冩暟鎹泦鐨勪俊鎭?
         dataset, num_classes, train_loader, test_loader, init_loader, name = all_train_sets[i]
         query = dataset.query[:args.eval_query_limit] if args is not None and args.eval_query_limit is not None else dataset.query
         gallery = dataset.gallery[:args.eval_gallery_limit] if args is not None and args.eval_gallery_limit is not None else dataset.gallery
@@ -898,8 +820,6 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
             if args is not None and (args.eval_query_limit is not None or args.eval_gallery_limit is not None) else test_loader
         print('Results on {}'.format(name))
 
-        # evaluator.evaluate 杩斿洖 (R1, mAP) 鎴栬€?(train_R1, train_mAP)
-        # 杩欓噷浼犲叆 query 鍜?gallery锛圧eID缁忓吀璇勬祴褰㈠紡锛歲uery鍘绘绱allery锛?
         if args is not None and args.task_type == 'place' and args.place_eval_backend == 'vpr':
             train_R1, train_mAP = evaluate_vpr_dataset(
                 model,
@@ -940,19 +860,14 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
                 adaptive_entropy_softmax_temp=args.vprtempo_adaptive_entropy_softmax_temp if args is not None else 10.0,
                 place_eval_mode=args.place_eval_mode if args is not None else 'legacy',
             )  # ,training_phase=i+1)
-        # 璁板綍姣忎釜鏁版嵁闆嗙殑鎸囨爣
         R1_all.append(train_R1)
         mAP_all.append(train_mAP)
-        # 鎷兼帴杈撳嚭瀛楃涓诧紙鏂逛究鎵撳嵃鎴愯〃锛?
         names = names + name + '\t\t'
         Results=Results+'|{:.1f}/{:.1f}\t'.format(train_mAP* 100, train_R1* 100)
-    # Seen 骞冲潎鎸囨爣
     aver_mAP = torch.tensor(mAP_all).mean()
     aver_R1 = torch.tensor(R1_all).mean()
 
     # =========================
-    # Part 2锛氬湪娌¤缁冭繃/浠呮祴璇曠殑鏁版嵁闆嗕笂娴嬭瘯
-    # all_test_sets 涓€鑸槸鍙敤浜庢祴璇曠殑闆嗗悎
     # =========================
     R1_all = []
     mAP_all = []
@@ -966,7 +881,6 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
         eval_loader = get_test_loader(dataset, 256, 128, args.batch_size, eval_workers, testset=list(set(query) | set(gallery))) \
             if args is not None and (args.eval_query_limit is not None or args.eval_gallery_limit is not None) else test_loader
         print('Results on {}'.format(name))
-        # 鍚屾牱鐨勮瘎娴嬫柟寮忥細query vs gallery
         if args is not None and args.task_type == 'place' and args.place_eval_backend == 'vpr':
             R1, mAP = evaluate_vpr_dataset(
                 model,
@@ -1007,12 +921,10 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
                 adaptive_entropy_softmax_temp=args.vprtempo_adaptive_entropy_softmax_temp if args is not None else 10.0,
                 place_eval_mode=args.place_eval_mode if args is not None else 'legacy',
             )
-        # 璁板綍姣忎釜 unseen 鏁版嵁闆嗙殑鎸囨爣
         R1_all.append(R1)
         mAP_all.append(mAP)
         names_unseen = names_unseen + name + '\t'
         Results_unseen = Results_unseen + '|{:.1f}/{:.1f}\t'.format(mAP* 100, R1* 100)
-    # Unseen 骞冲潎鎸囨爣
     if len(mAP_all) > 0:
         aver_mAP_unseen = torch.tensor(mAP_all).mean()
         aver_R1_unseen = torch.tensor(R1_all).mean()
@@ -1020,11 +932,9 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
         aver_mAP_unseen = None
         aver_R1_unseen = None
     # =========================
-    # 鎵撳嵃姹囨€荤粨鏋滐紙Seen + Unseen锛?
     # =========================
     print("Average mAP on Seen dataset: {:.1f}%".format(aver_mAP * 100))
     print("Average R1 on Seen dataset: {:.1f}%".format(aver_R1 * 100))
-    # 缁?Seen 杈撳嚭鍔犱竴涓钩鍧囬」
     names = names + '|Average\t|'
     Results = Results + '|{:.1f}/{:.1f}\t|'.format(aver_mAP * 100, aver_R1 * 100)
     print(names)
@@ -1033,7 +943,6 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
     if aver_mAP_unseen is not None:
         print("Average mAP on unSeen dataset: {:.1f}%".format(aver_mAP_unseen * 100))
         print("Average R1 on unSeen dataset: {:.1f}%".format(aver_R1_unseen * 100))
-        # 缁?Unseen 杈撳嚭鍔犱竴涓钩鍧囬」
         names_unseen = names_unseen + '|Average\t|'
         Results_unseen = Results_unseen + '|{:.1f}/{:.1f}\t|'.format(aver_mAP_unseen* 100, aver_R1_unseen* 100)
         print(names_unseen)
@@ -1041,8 +950,6 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
     else:
         print("No unseen-only datasets configured for this run.")
     # =========================
-    # 濡傛灉鎻愪緵浜?logger_res锛屽氨鎶婄粨鏋滃啓鍏?log_res.txt
-    # 锛堜笅闈?replace 鏄负浜嗘妸瀛楃涓插彉鎴愭洿鏂逛究澶嶅埗鍒拌〃鏍肩殑鏍煎紡锛?
     # =========================
     if logger_res:
         logger_res.append(names)
@@ -1052,66 +959,47 @@ def test_model(model, all_train_sets, all_test_sets, set_index, logger_res=None,
             logger_res.append(names_unseen)
             logger_res.append(Results_unseen)
             logger_res.append(Results_unseen.replace('|', '').replace('/', '\t'))
-    return train_mAP  # 杩欓噷杩斿洖鏈€鍚庝竴娆?seen 鏁版嵁闆嗙殑 mAP
+    return train_mAP
 
 
 
 def linear_combination(args, model, model_old, alpha, model_old_id=-1):
-    """
-       灏嗗綋鍓嶆ā鍨?model)涓庢棫妯″瀷(model_old)鍋氱嚎鎬ц瀺鍚堬紝寰楀埌铻嶅悎妯″瀷model_new銆?
-       浣滅敤锛氱粓韬涔犻噷鐢ㄦ潵骞宠　鈥滄柊鐭ヨ瘑鈥濆拰鈥滄棫鐭ヨ瘑鈥濓紝鍑忓皯閬楀繕銆?
-
-       alpha 瓒婂ぇ锛氳秺鐩镐俊褰撳墠鏂版ā鍨嬶紙鐭湡鐭ヨ瘑锛?
-       alpha 瓒婂皬锛氳秺淇濈暀鏃фā鍨嬶紙闀挎湡璁板繂锛?
-       """
-    # 1) 鍙栧嚭鏃фā鍨嬪弬鏁?
     '''old model '''
     model_old_state_dict = model_old.state_dict()
-    # 2) 鍙栧嚭褰撳墠妯″瀷鍙傛暟
     '''latest trained model'''
     model_state_dict = model.state_dict()
-    # 3) 浠ュ綋鍓嶆ā鍨嬩负妯℃澘澶嶅埗涓€涓柊妯″瀷锛岀敤鏉ヨ铻嶅悎鍚庣殑鍙傛暟
     ''''create new model'''
     model_new = copy.deepcopy(model)
     model_new_state_dict = model_new.state_dict()
-    # 4) 閬嶅巻褰撳墠妯″瀷鐨勬墍鏈夊弬鏁帮紝閫愪釜铻嶅悎
     '''fuse the parameters'''
     for k, v in model_state_dict.items():
-        if model_old_state_dict[k].shape == v.shape:  # 鎯呭喌1锛氬弬鏁板舰鐘朵竴鏍凤紙澶ч儴鍒嗗眰閮藉睘浜庤繖绉嶆儏鍐碉級
+        if model_old_state_dict[k].shape == v.shape:
             # print(k,'+++')
                 model_new_state_dict[k] = alpha * v + (1 - alpha) * model_old_state_dict[k]
-        else:  # 鎯呭喌2锛氬弬鏁板舰鐘朵笉涓€鏍凤紙鏈€甯歌灏辨槸 classifier 鏉冮噸鍥犱负绫诲埆鏁板鍔犺€屽彉澶э級
+        else:
             print(k, '...')
-            num_class_old = model_old_state_dict[k].shape[0]  # 鏃фā鍨嬭繖灞傚弬鏁扮殑鈥滄棫绫诲埆鏁扳€?
-            # 鍙鏃х被鍒偅閮ㄥ垎鍋氳瀺鍚?
-            # 鏂版ā鍨嬪鍑烘潵鐨勯偅閮ㄥ垎锛堟柊绫诲埆鏉冮噸锛夋病鏈夋棫妯″瀷瀵瑰簲鍙傛暟锛屾墍浠ヤ笉铻嶅悎
+            num_class_old = model_old_state_dict[k].shape[0]
             model_new_state_dict[k][:num_class_old] = alpha * v[:num_class_old] + (1 - alpha) * model_old_state_dict[k]
-    model_new.load_state_dict(model_new_state_dict)  # 5) 鎶婅瀺鍚堝ソ鐨勫弬鏁板姞杞藉洖鏂版ā鍨?
+    model_new.load_state_dict(model_new_state_dict)
     return model_new
 
 
 if __name__ == '__main__':
-    # 鍒涘缓鍛戒护琛屽弬鏁拌В鏋愬櫒
     parser = argparse.ArgumentParser(description="Continual training for lifelong person re-identification")
-    # data 鏁版嵁鐩稿叧
-    parser.add_argument('-b', '--batch-size', type=int, default=128)  # batch澶у皬
-    parser.add_argument('-j', '--workers', type=int, default=0)  # dataloader绾跨▼鏁?
+    parser.add_argument('-b', '--batch-size', type=int, default=128)
+    parser.add_argument('-j', '--workers', type=int, default=0)
     parser.add_argument('--eval-workers', type=int, default=None,
                         help="optional dataloader worker count used only during evaluation; defaults to --workers")
-    parser.add_argument('--height', type=int, default=256, help="input height")  # 杈撳叆鍥惧儚楂?
-    parser.add_argument('--width', type=int, default=128, help="input width")  # 杈撳叆鍥惧儚瀹?
-    # ReID缁忓吀 PK閲囨牱鍙傛暟锛?
-    # 涓€涓猙atch浼氬寘鍚?(batch_size // num_instances) 涓笉鍚孖D锛?
-    # 姣忎釜ID鍙?num_instances 寮犲浘
+    parser.add_argument('--height', type=int, default=256, help="input height")
+    parser.add_argument('--width', type=int, default=128, help="input width")
     parser.add_argument('--num-instances', type=int, default=4,
                         help="each minibatch consist of "
                              "(batch_size // num_instances) identities, and "
                              "each identity has num_instances instances, "
                              "default: 0 (NOT USE)")
 
-    # model 妯″瀷鐩稿叧
     parser.add_argument('--MODEL', type=str, default='50x',
-                        choices=['50x', 'snn_tiny', 'vprtempo_snn'])  # backbone閫夋嫨
+                        choices=['50x', 'snn_tiny', 'vprtempo_snn'])
     parser.add_argument('--snn-input-h', type=int, default=56, help="pooled SNN input height")
     parser.add_argument('--snn-input-w', type=int, default=56, help="pooled SNN input width")
     parser.add_argument('--snn-hidden-dim', type=int, default=1024, help="hidden dimension of the lightweight SNN backbone")
@@ -1154,24 +1042,22 @@ if __name__ == '__main__':
                         help="output-layer intrinsic plasticity rate for stage adaptation")
     parser.add_argument('--vprtempo-stage-output-stdp-rate', type=float, default=0.005,
                         help="output-layer STDP rate for stage adaptation")
-    # optimizer 浼樺寲鍣ㄧ浉鍏?
     parser.add_argument('--optimizer', type=str, default='SGD', choices=['SGD', 'Adam'],
                         help="optimizer ")
     parser.add_argument('--lr', type=float, default=0.008,
                         help="learning rate of new parameters, for pretrained ")
-    parser.add_argument('--momentum', type=float, default=0.9)  # SGD鍔ㄩ噺
-    parser.add_argument('--weight-decay', type=float, default=1e-4)  # L2姝ｅ垯
-    parser.add_argument('--warmup-step', type=int, default=10)  # warmup姝ユ暟
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--weight-decay', type=float, default=1e-4)
+    parser.add_argument('--warmup-step', type=int, default=10)
     parser.add_argument('--milestones', nargs='+', type=int, default=[30],
-                        help='milestones for the learning rate decay')  # 瀛︿範鐜囦笅闄嶇殑epoch鐐?
-    # training configs 璁粌鎺у埗
-    parser.add_argument('--resume', type=str, default=None, metavar='PATH')  # 浠巆heckpoint缁х画璁粌
+                        help='milestones for the learning rate decay')
+    parser.add_argument('--resume', type=str, default=None, metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
-                        help="evaluation only")  # 鍙瘎浼颁笉璁粌
-    parser.add_argument('--epochs0', type=int, default=80)  # 绗竴闃舵璁粌epoch鏁?
-    parser.add_argument('--epochs', type=int, default=60)  # 鍚庣画闃舵璁粌epoch鏁?
-    parser.add_argument('--eval_epoch', type=int, default=100)  # 姣忛殧澶氬皯epoch璇勪及/淇濆瓨锛堥€氬父寰堝ぇ=鍙湪鏈€鍚庯級
-    parser.add_argument('--seed', type=int, default=0)  # 闅忔満绉嶅瓙
+                        help="evaluation only")
+    parser.add_argument('--epochs0', type=int, default=80)
+    parser.add_argument('--epochs', type=int, default=60)
+    parser.add_argument('--eval_epoch', type=int, default=100)
+    parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--amp', action='store_true', help="enable mixed precision training on CUDA")
     parser.add_argument('--cudnn-benchmark', action='store_true',
                         help="enable cudnn benchmark for faster fixed-shape training when deterministic reproducibility is not required")
@@ -1186,14 +1072,13 @@ if __name__ == '__main__':
     parser.add_argument('--prefetch-factor', type=int, default=2,
                         help="number of prefetched batches per dataloader worker when workers > 0")
     
-    # path 璺緞鐩稿叧
     parser.add_argument('--data-dir', type=str, metavar='PATH',
-                        default='../DATA/PRID')  # 鏁版嵁鐩綍
+                        default='../DATA/PRID')
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default=osp.join('../logs/try'))  # 鏃ュ織杈撳嚭鐩綍
+                        default=osp.join('../logs/try'))
 
     parser.add_argument('--config_file', type=str, default='config/base.yml',
-                        help="config_file")  # 閰嶇疆鏂囦欢
+                        help="config_file")
     parser.add_argument('--task-type', type=str, default='reid', choices=['reid', 'place'],
                         help="run the original person ReID setup or the new place recognition dataset pipeline")
     parser.add_argument('--place-train-seq', type=str, default='',
@@ -1332,11 +1217,8 @@ if __name__ == '__main__':
                         help="optional cap on the number of place IDs used for fast sequential-training experiments")
     parser.add_argument('--alpha-sample-limit', type=int, default=1024,
                         help="optional cap on feature samples used when estimating adaptive alpha")
-    # 鎸囧畾鍒欒蛋鈥滃姞杞藉涓猚kpt骞舵祴璇曗€濈殑妯″紡
-    #  缁堣韩瀛︿範鐩稿叧
-    parser.add_argument('--setting', type=int, default=1, choices=[1, 2], help="training order setting")  # 鏁版嵁闆嗛『搴忚缃?
-    parser.add_argument('--middle_test', action='store_true', help="test during middle step")  # 璁粌涓€旀槸鍚︽祴璇?
-    # anti-forgetting 鏉冮噸锛堝弽閬楀繕椤圭殑鏉冮噸锛岄€氬父鍦?Trainer.train 閲岀敤锛?
+    parser.add_argument('--setting', type=int, default=1, choices=[1, 2], help="training order setting")
+    parser.add_argument('--middle_test', action='store_true', help="test during middle step")
     parser.add_argument('--max-stages', type=int, default=None, help="limit the number of training stages for debugging")
     parser.add_argument('--AF_weight', default=1.0, type=float, help="anti-forgetting weight")    
     parser.add_argument('--disable-stage-model-fusion', action='store_true',
